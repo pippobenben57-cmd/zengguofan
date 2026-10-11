@@ -211,9 +211,10 @@ input[type=search]::placeholder{color:var(--ink-soft)}
     <h3>来源与说明</h3>
     <ul>
       <li><b>年谱</b>　《曾文正公年谱》十二卷，黎庶昌编，取自维基文库。每站下面列的是那几年的年谱原文。<a href="https://zh.wikisource.org/wiki/曾文正公年譜" target="_blank" rel="noopener">zh.wikisource.org/wiki/曾文正公年譜</a></li>
-      <li><b>家书、日记、文章</b>　取自维基文库《曾國藩家書》《曾國藩日記》及单篇页面。维基文库上的家书只有七十多封，日记只有几十天的节选，远不是全部：他传世的家书有一千四百多封，日记三十多年。</li>
+      <li><b>家书</b>　有两个来源。带日期的七十多封取自维基文库《曾國藩家書》。其余一百五十多封取自 GitHub 上的 <a href="https://github.com/GaaarfieldWang/AncientChineseCorpus" target="_blank" rel="noopener">GaaarfieldWang/AncientChineseCorpus</a> 所收《曾国藩家书》，那是一个现代选注本，本站只用了书信原文，没有用其中的注释和白话翻译；该仓库没有标明许可。这批信原书没有日期，题目里用开头一句来区分，归站是按它们在书中的先后顺序和信里提到的地点判断的。两处合计二百二十多封，他传世的家书有一千四百多封。</li>
+      <li><b>日记、文章</b>　取自维基文库《曾國藩日記》及单篇页面。日记只有几十天的节选。</li>
       <li><b>传记</b>　《清史稿》卷四百五《曾国藩传》，取自维基文库。</li>
-      <li><b>许可</b>　以上原文均属公有领域，标点与整理由维基文库贡献者完成，依 CC BY-SA 4.0 许可使用。</li>
+      <li><b>许可</b>　以上原文均属公有领域。取自维基文库的部分，标点与整理由维基文库贡献者完成，依 CC BY-SA 4.0 许可使用。</li>
       <li><b>简体文字</b>　家书、日记、文章由繁体经 OpenCC 自动转换，个别字可能与通行本不同；年谱原页面即为简体，有少数缺字以“□”表示。</li>
       <li><b>各站概述、大事、人物交集</b>　由 AI（Claude）撰写。时间和大事的先后对照年谱核过一部分（1811至1854年逐年看过，其后只核了关键节点）；出自笔记野史的说法，文中已注明。</li>
       <li><b>作品归站</b>　年谱按年月、家书和日记按所署日期由程序归入各站，他在两地之间移动的那个月可能归错。</li>
@@ -596,7 +597,7 @@ document.getElementById("bioBtn").addEventListener("click",showBio);
 
 /* ---------- 人物线 ---------- */
 /* 文章题目里对这些人的称呼 */
-const ALIAS={"曾国荃":["沅弟"],"曾国潢":["澄弟"],"曾国华":["温弟"],"曾国葆":["季弟"],"曾纪泽":["纪泽"],"曾纪鸿":["纪鸿"],"欧阳夫人":["欧阳夫人"]};
+const ALIAS={"曾国荃":["沅弟","沅甫","子植","沅、","、沅"],"曾国潢":["澄弟","澄侯","澄、"],"曾国华":["温弟","温甫","温、"],"曾国葆":["季弟","季洪","季两弟","、季"],"曾纪泽":["纪泽"],"曾纪鸿":["纪鸿"],"欧阳夫人":["欧阳夫人"]};
 const pbox=document.getElementById("people");
 PEOPLE.forEach((P,pi)=>{
   const b=document.createElement("button");b.type="button";b.textContent=P.n;b.setAttribute("aria-pressed","false");
