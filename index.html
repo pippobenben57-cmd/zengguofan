@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="曾国藩一生二十三站的可交互地图：每一站的经历、大事、年谱原文和家书日记，可全文检索，也可按人物查看。">
+<title>曾国藩行迹图</title>
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>
+/* 布局：上方横向年表，下方左图右文；地图是主角，朱砂只用在“当前这一站” */
+:root{
+  --bg:#dfe8e4;        /* 天青釉底 */
+  --land:#eef3ef;      /* 陆地，釉面留白 */
+  --sea:#c3d5d1;       /* 海 */
+  --ink:#1c2a2b;       /* 墨 */
+  --ink-soft:#56686a;  /* 淡墨 */
+  --line:#a9bcb8;      /* 界线 */
+  --river:#7fa3a6;     /* 水 */
+  --seal:#b3271f;      /* 印泥朱砂 */
+  --seal-ink:#fff6f2;  /* 朱底上的字 */
+  --panel:#f4f7f4;     /* 文字面板 */
+  --display:"Ma Shan Zheng","Kaiti SC","STKaiti","KaiTi",serif;
+  --body:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10181a;--land:#1b272a;--sea:#0b1113;--ink:#dfe8e4;--ink-soft:#8fa3a3;
+    --line:#35474a;--river:#4d7377;--seal:#e2584a;--seal-ink:#1a0d0b;--panel:#172124;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10181a;--land:#1b272a;--sea:#0b1113;--ink:#dfe8e4;--ink-soft:#8fa3a3;
+  --line:#35474a;--river:#4d7377;--seal:#e2584a;--seal-ink:#1a0d0b;--panel:#172124;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.8;padding-inline:20px;padding-block:28px 56px}
+.wrap{max-width:1180px;margin-inline:auto;display:flex;flex-direction:column;gap:22px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 20px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(2.2rem,5vw,3.2rem);line-height:1.1;margin:0;letter-spacing:.04em}
+.sub{color:var(--ink-soft);font-size:.95rem;margin:0}
+
+/* 年表 */
+.strip{display:flex;gap:0;overflow-x:auto;border-block:1px solid var(--line);scrollbar-width:thin}
+.strip button{flex:0 0 auto;padding:10px 14px 9px;text-align:left;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:0;line-height:1.35}
+.strip button:last-child{border-right:0}
+.strip .yr{font-size:.74rem;color:var(--ink-soft);font-variant-numeric:tabular-nums;letter-spacing:.03em}
+.strip .pl{font-family:var(--display);font-size:1.3rem}
+.strip button:hover{background:var(--land)}
+.strip button[aria-current="true"]{background:var(--seal);color:var(--seal-ink)}
+.strip button[aria-current="true"] .yr{color:var(--seal-ink)}
+.strip button.past .pl{color:var(--ink-soft)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:start}
+@media (max-width:860px){.stage{grid-template-columns:minmax(0,1fr);gap:20px}}
+
+/* 地图 */
+.mapbox{position:sticky;top:env(safe-area-inset-top,0px);margin:0}
+@media (max-width:860px){.mapbox{position:static}}
+svg.map{display:block;width:100%;height:auto;max-height:calc(100vh - 40px);background:var(--sea);border:1px solid var(--line)}
+.land{fill:var(--land);stroke:var(--line);stroke-width:1}
+.river{fill:none;stroke:var(--river);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.river.minor{stroke-width:1}
+.rlabel{font-family:var(--body);font-size:12px;fill:var(--river);letter-spacing:.3em}
+.route-base{fill:none;stroke:var(--ink-soft);stroke-width:1;stroke-dasharray:2 5;opacity:.4}
+.route{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;opacity:.75;transition:stroke-dashoffset .9s ease}
+.route.on{stroke-dashoffset:0}
+.route.now{stroke:var(--seal);stroke-width:2.8;opacity:1}
+.pt{cursor:pointer}
+.pt circle.dot{fill:var(--land);stroke:var(--ink-soft);stroke-width:1.5;transition:fill .3s}
+.pt.seen circle.dot{fill:var(--ink);stroke:var(--ink)}
+.pt.now circle.dot{fill:var(--seal);stroke:var(--seal)}
+.pt circle.ring{fill:none;stroke:var(--seal);stroke-width:1.5;opacity:0}
+.pt.now circle.ring{opacity:.7;animation:ring 2.2s ease-out infinite}
+.pt circle.hit{fill:transparent}
+.pt text{font-family:var(--display);font-size:20px;fill:var(--ink-soft);stroke:var(--land);stroke-width:4;paint-order:stroke;stroke-linejoin:round}
+.pt.seen text{fill:var(--ink)}
+.pt.now text{fill:var(--seal);font-size:25px}
+.pt:focus-visible{outline:none}
+.pt:focus-visible circle.dot{stroke:var(--seal);stroke-width:3}
+@keyframes ring{from{r:7;opacity:.8}to{r:22;opacity:0}}
+.scale line{stroke:var(--ink-soft);stroke-width:1.2}
+.scale text{font-family:var(--body);font-size:11px;fill:var(--ink-soft)}
+figcaption{font-size:.8rem;color:var(--ink-soft);margin-top:8px;line-height:1.6}
+@media (prefers-reduced-motion:reduce){.route{transition:none}.pt.now circle.ring{animation:none}}
+
+/* 文字 */
+.detail{min-width:0;display:flex;flex-direction:column;gap:18px}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.nav .count{font-size:.85rem;color:var(--ink-soft);font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.nav .btns{display:flex;gap:8px}
+.nav button{border:1px solid var(--ink);padding:6px 16px;font-size:.92rem;line-height:1.5}
+.nav button:hover:not(:disabled){background:var(--ink);color:var(--bg)}
+.nav button:disabled{opacity:.3;cursor:default}
+.head{display:flex;gap:16px;align-items:flex-start}
+.seal{flex:0 0 auto;background:var(--seal);color:var(--seal-ink);font-family:var(--display);font-size:2.2rem;line-height:1.05;padding:10px 8px;writing-mode:vertical-rl;letter-spacing:.06em;border-radius:3px}
+.head h2{font-size:1.45rem;font-weight:700;margin:0 0 6px;line-height:1.35;text-wrap:balance}
+.meta{margin:0;color:var(--ink-soft);font-size:.9rem;line-height:1.7}
+.visits{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.82rem;color:var(--ink-soft)}
+.visits button{border:1px solid var(--line);padding:1px 9px;font-variant-numeric:tabular-nums;line-height:1.6}
+.visits button:hover{border-color:var(--ink)}
+.visits button[aria-current="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.body p{margin:0 0 .9em;max-width:34em}
+.body p:last-child{margin-bottom:0}
+h3{font-size:.8rem;font-weight:600;letter-spacing:.3em;color:var(--ink-soft);margin:0;padding-top:14px;border-top:1px solid var(--line)}
+.events{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.events li{display:grid;grid-template-columns:5.6em minmax(0,1fr);gap:12px;font-size:.93rem;line-height:1.7}
+.events .when{color:var(--seal);font-size:.82rem;font-variant-numeric:tabular-nums;padding-top:.1em}
+.works{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
+.works li{background:var(--panel);padding:12px 16px}
+.works .wt{font-weight:600;font-size:.95rem}
+.works .wy{color:var(--ink-soft);font-size:.82rem;margin-left:8px;font-variant-numeric:tabular-nums}
+.works blockquote{margin:5px 0 0;font-family:var(--display);font-size:1.28rem;line-height:1.6}
+.works .wn{margin:5px 0 0;font-size:.85rem;color:var(--ink-soft);line-height:1.7}
+.hint{font-size:.8rem;color:var(--ink-soft);margin:0}
+
+.src{border-top:1px solid var(--line);padding-top:18px;margin-top:20px;font-size:.84rem;color:var(--ink-soft);line-height:1.8}
+.src h3{border:0;padding:0;margin:0 0 8px}
+.src ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px;max-width:60em}
+.src b{color:var(--ink);font-weight:600}
+.src a{color:inherit;text-underline-offset:3px;word-break:break-all}
+.home{align-self:flex-start;font-size:.84rem;color:var(--ink-soft);text-decoration:none;letter-spacing:.06em;margin-bottom:-8px}
+.home:hover{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+.qin{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:.86rem;color:var(--ink-soft)}
+.qin button{border:1px solid var(--ink);padding:4px 14px;line-height:1.6;color:var(--ink)}
+.qin{flex-wrap:wrap;justify-content:flex-end}
+.qin button.mini{border-color:var(--line);padding:2px 10px;font-size:.82rem}
+.qin button:hover{background:var(--ink);color:var(--bg)}
+.qin button[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
+.qin input[type=range]{width:84px;accent-color:var(--seal)}
+/* 全集 */
+input[type=search]{font:inherit;font-size:.92rem;color:var(--ink);background:var(--panel);border:1px solid var(--line);padding:6px 12px;width:100%;border-radius:0}
+input[type=search]::placeholder{color:var(--ink-soft)}
+.tools{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.tools .find{flex:1 1 260px;min-width:0;max-width:420px}
+.tools .bucket{font-size:.85rem;color:var(--ink-soft);text-decoration:underline;text-underline-offset:3px;padding:0}
+.tools .bucket:hover{color:var(--ink)}
+.tools .stat{font-size:.82rem;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.qres{border:1px solid var(--line);background:var(--panel);padding:10px 14px;display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto}
+.qres p{margin:0 0 4px;font-size:.82rem;color:var(--ink-soft)}
+.qres button{text-align:left;padding:3px 0;font-size:.92rem;line-height:1.6;display:flex;gap:10px;justify-content:space-between;align-items:baseline}
+.qres button:hover .rt{text-decoration:underline}
+.qres .rs{flex:0 0 auto;font-size:.78rem;color:var(--ink-soft)}
+.full{display:flex;flex-direction:column;gap:12px}
+.full>p{margin:0;font-size:.86rem;color:var(--ink-soft);line-height:1.7}
+.full h4{margin:8px 0 0;font-size:.88rem;font-weight:600}
+.wl{display:flex;flex-direction:column}
+.wk{border-bottom:1px solid var(--line)}
+.wk summary{cursor:pointer;padding:6px 0;font-size:.93rem;line-height:1.6;list-style:none;display:flex;gap:10px}
+.wk summary::-webkit-details-marker{display:none}
+.wk summary::before{content:"＋";color:var(--ink-soft);flex:0 0 auto;font-size:.8rem;padding-top:.15em}
+.wk[open] summary::before{content:"－"}
+.wk[open] summary{font-weight:600}
+.wk summary:hover{color:var(--seal)}
+.wk .tx{padding:2px 0 14px 1.6em;font-family:var(--display);font-size:1.22rem;line-height:1.75;white-space:pre-line}
+.wk.hit summary{color:var(--seal)}
+.wk .tx.pr{font-family:var(--body);font-size:1rem;line-height:1.9}
+.wk .raw{font-style:normal;font-size:.72rem;color:var(--ink-soft);border:1px solid var(--line);padding:0 5px;margin-left:8px;white-space:nowrap}
+.people{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.86rem}
+.people>span{color:var(--ink-soft);margin-right:4px}
+.people button{border:1px solid var(--line);padding:1px 10px;line-height:1.7}
+.people button:hover{border-color:var(--ink)}
+.people button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.meet{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.meet button{display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:12px;text-align:left;width:100%;padding:8px 0;border-bottom:1px solid var(--line);font-size:.93rem;line-height:1.7}
+.meet button:hover .mt{color:var(--seal)}
+.meet .mw{font-size:.82rem;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.meet .mw b{display:block;font-family:var(--display);font-weight:400;font-size:1.15rem;color:var(--ink)}
+.linkbtn{align-self:flex-start;border:1px solid var(--ink);padding:5px 14px;font-size:.9rem}
+.linkbtn:hover{background:var(--ink);color:var(--bg)}
+.grp{border-bottom:1px solid var(--line)}
+.grp>summary{cursor:pointer;padding:8px 0;font-weight:600;font-size:.95rem}
+.grp>.wl{padding-left:1em}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <a class="home" href="../">← 渊默的学习小院</a>
+  <header>
+    <h1>曾国藩行迹图</h1>
+    <p class="sub">1811—1872 · 二十三站 · 从湘乡到金陵。点地图上的地名，或顺着年表一站一站走；每站末尾有那几年的年谱原文和他写下的家书、日记、文章。</p>
+  </header>
+
+  <nav class="strip" id="strip" aria-label="年表"></nav>
+
+  <div class="tools">
+    <div class="find"><input type="search" id="q" placeholder="在全部原文里找：如“沅弟”“靖港”“读书”" aria-label="搜索全部作品"></div>
+    <button type="button" class="bucket" id="bucketBtn" hidden></button>
+    <button type="button" class="bucket" id="bioBtn" hidden>读《清史稿》本传</button>
+    <span class="stat" id="stat">正在载入原文…</span>
+  </div>
+  <div class="qres" id="qres" hidden></div>
+  <div class="people" id="people"><span>按人物看：</span></div>
+
+  <div class="stage">
+    <figure class="mapbox">
+      <svg class="map" id="map" viewBox="0 0 780 940" role="group" aria-label="曾国藩行迹地图"></svg>
+      <figcaption>示意图：海岸与河道按今天的走向简化绘制（黄河在1855年改道，此前走苏北入海）；路线只连接各站，不是实际走过的道路。地名用清代称呼，月日为农历。</figcaption>
+    </figure>
+
+    <article class="detail" id="detail" aria-live="polite"></article>
+  </div>
+
+  <footer class="src">
+    <h3>来源与说明</h3>
+    <ul>
+      <li><b>年谱</b>　《曾文正公年谱》十二卷，黎庶昌编，取自维基文库。每站下面列的是那几年的年谱原文。<a href="https://zh.wikisource.org/wiki/曾文正公年譜" target="_blank" rel="noopener">zh.wikisource.org/wiki/曾文正公年譜</a></li>
+      <li><b>家书、日记、文章</b>　取自维基文库《曾國藩家書》《曾國藩日記》及单篇页面。维基文库上的家书只有七十多封，日记只有几十天的节选，远不是全部：他传世的家书有一千四百多封，日记三十多年。</li>
+      <li><b>传记</b>　《清史稿》卷四百五《曾国藩传》，取自维基文库。</li>
+      <li><b>许可</b>　以上原文均属公有领域，标点与整理由维基文库贡献者完成，依 CC BY-SA 4.0 许可使用。</li>
+      <li><b>简体文字</b>　家书、日记、文章由繁体经 OpenCC 自动转换，个别字可能与通行本不同；年谱原页面即为简体，有少数缺字以“□”表示。</li>
+      <li><b>各站概述、大事、人物交集</b>　由 AI（Claude）撰写。时间和大事的先后对照年谱核过一部分（1811至1854年逐年看过，其后只核了关键节点）；出自笔记野史的说法，文中已注明。</li>
+      <li><b>作品归站</b>　年谱按年月、家书和日记按所署日期由程序归入各站，他在两地之间移动的那个月可能归错。</li>
+      <li><b>地图</b>　为手绘示意，海岸与河道按今天的走向简化，不是精确地图。</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+const PLACES = {
+  xiangxiang:{n:"湘乡", lon:112.20, lat:27.50, lab:[-12,6,"end"]},
+  changsha:{n:"长沙", lon:112.94, lat:28.23, lab:[10,-8,"start"]},
+  jingshi:{n:"京师", lon:116.40, lat:39.90, lab:[0,-13,"middle"]},
+  chengdu:{n:"成都", lon:104.07, lat:30.66, lab:[0,-13,"middle"]},
+  hengzhou:{n:"衡州", lon:112.57, lat:26.89, lab:[4,24,"middle"]},
+  wuchang:{n:"武昌", lon:114.30, lat:30.55, lab:[-12,-6,"end"]},
+  nanchang:{n:"南昌", lon:115.86, lat:28.68, lab:[-12,8,"end"]},
+  jianchang:{n:"建昌", lon:116.63, lat:27.55, lab:[12,8,"start"]},
+  qimen:{n:"祁门", lon:117.72, lat:29.85, lab:[12,10,"start"]},
+  anqing:{n:"安庆", lon:117.05, lat:30.53, lab:[-12,-6,"end"]},
+  jinling:{n:"金陵", lon:118.78, lat:32.06, lab:[12,8,"start"]},
+  xuzhou:{n:"徐州", lon:117.18, lat:34.26, lab:[12,6,"start"]},
+  baoding:{n:"保定", lon:115.47, lat:38.87, lab:[-12,8,"end"]},
+  tianjin:{n:"天津", lon:117.20, lat:39.13, lab:[12,8,"start"]}
+};
+
+/* e: [时间, 事件]；w: [题目, 年份, 原句, 说明]。月日为农历。 */
+const STOPS = [
+ {p:"xiangxiang", yr:"1811—1833", title:"白杨坪的农家子弟", modern:"今湖南双峰县荷叶镇", role:"读书，应童子试",
+  body:["嘉庆十六年十月十一日（公历1811年11月26日），曾国藩生于湘乡白杨坪。这一家世代务农，几百年没出过一个有功名的人。祖父星冈公年轻时游荡，中年发愤，从此起早贪黑治家，一心要让子孙读书。","父亲竹亭公资质平常，考了十七次童子试，四十三岁才中秀才。国藩是长子，五岁开蒙，一直跟着父亲在家塾里读书，二十三岁那年考取秀才，比父亲只晚了一年。同年冬天娶了衡阳廪生欧阳凝祉的女儿。"],
+  e:[["1811","十月十一日生，初名子城。"],["1815","五岁，受学于家塾。"],["1820","弟国潢生。此后国华、国荃、国葆相继出生，兄弟五人。"],["1826","应长沙府试，取第七名。"],["1830—1831","到衡阳唐氏家塾、湘乡涟滨书院读书。二十一岁改号“涤生”。"],["1832","父亲入县学。他自己备取，以佾生注册。"],["1833","入县学。十二月欧阳夫人来归。"]],
+  w:[["改号涤生","日记，道光二十年","涤者，取涤其旧染之污也；生者，取明袁了凡之言“从前种种，譬如昨日死；从后种种，譬如今日生”也。","九年后在京城日记里追述。"]]},
+
+ {p:"changsha", yr:"1834", title:"岳麓书院，一举中式", modern:"今湖南长沙", role:"岳麓书院生员，举人",
+  body:["他到长沙岳麓书院读书，诗文在同学里出了名，考试常得第一。这一年秋天参加湖南乡试，中第三十六名举人。","也是在这一年，他在朱氏学舍认识了刘蓉，一见如故，留宿了两夜才分手。刘蓉后来是他的幕僚和儿女亲家。十一月他启程进京，准备第二年的会试。"],
+  e:[["1834","肄业岳麓书院。乡试中式第三十六名。"],["1834","初识刘蓉。十一月入都。"]],
+  w:[]},
+
+ {p:"jingshi", yr:"1835—1838", title:"两次落第，第三次考中", modern:"今北京，中间回过湘乡", role:"举人，进士，翰林院庶吉士",
+  body:["头一次会试没中，他留在京城读书，喜欢上了韩愈的文章。第二年恩科又没中，他南下游历，在金陵看到一部《二十三史》，借钱加上典当衣服才买下来。回到家，父亲说：借钱买书我不怪你，我会想办法替你还，你只要把它细读一遍，就算不负我了。他从此每天读十页，足不出户将近一年。","道光十八年他第三次进京，盘缠是向亲戚借的三十二吊钱，到京只剩三吊。这一次中了第三十八名进士，殿试列三甲第四十二名，赐同进士出身。朝考他考了一等第三，皇帝亲手拔为第二，选入翰林院。他把名字从“子城”改成了“国藩”。"],
+  e:[["1835","会试不售，留京读书。"],["1836","恩科会试再落第。游江南，过金陵买《二十三史》。"],["1837","在浏阳研究古乐；过长沙与刘蓉、郭嵩焘相聚月余。十二月借钱入都。"],["1838","正月入都，会试中式。四月殿试三甲第四十二名，朝考一等第二名。五月改翰林院庶吉士，更名国藩。"],["1838","八月请假出都，与郭嵩焘同行，十二月抵家。祖父对父亲说：他做了翰林，事业还长，家里的吃穿用度不要让他操心。"]],
+  w:[]},
+
+ {p:"xiangxiang", yr:"1839", title:"在家一年，开始写日记", modern:"今湖南双峰、衡阳、邵阳一带", role:"庶吉士，请假在籍",
+  body:["这一年开头并不顺。正月乡里天花流行，他十岁的小妹妹和才十五个月的长子桢第都染病夭折。","他在湖南各地走了大半年，到衡阳、耒阳、永兴、武冈、新化，拜谒杜甫祠堂，替各处同族修谱。十一月初二，次子纪泽出生，他当天启程北上，父亲和叔父送到长沙。这一年他开始逐日记日记，此后断断续续记到去世前一天。"],
+  e:[["1839 正月","季妹与长子桢第痘殇。"],["1839 四月至十月","游衡阳、耒阳、永兴、邵阳、武冈、新化等地。"],["1839 十一月初二","子纪泽生。当日启行北上。十二月在河南罗山遇大雪，留下过年。"]],
+  w:[]},
+
+ {p:"jingshi", yr:"1840—1843", title:"翰林院里立下的日课", modern:"今北京", role:"翰林院检讨",
+  body:["散馆考试后他被授为检讨，正式做了翰林。头一年夏天他病得几乎不治，靠同寓的欧阳兆熊照料才活下来。","他自己说，留馆之后本该用功，却“日日玩愒”，四十多天一事无成。三十一岁那年，他拜见理学名臣唐鉴，问读书和修身的门径。唐鉴告诉他以朱子全书为宗，又说检身的要诀就是“不自欺”。他同倭仁等人相约每天写日记，把一天里的念头行事全记下来互相批阅。","他给自己定了十二条日课：主敬、静坐、早起、读书不二、读史、谨言、养气、保身、日知所亡、月无忘所能、作字、夜不出门。他为戒烟砸了烟袋，为多说了一句闲话在日记里骂自己“真禽兽矣”。"],
+  e:[["1840 四月","散馆，授翰林院检讨。六月病热几不救。十二月父亲带着夫人、九弟国荃、儿子纪泽入都。"],["1841 七月","从唐鉴讲求为学之方。"],["1842","与倭仁、吴廷栋、何桂珍、陈源兖等人切磋程朱之学，立日课。七月九弟国荃出都，他送到卢沟桥。"],["1843 三月","翰詹大考列二等第一，升翰林院侍讲。"]],
+  w:[["日记，道光二十年六月初七日","1840","留馆后，本要用功，而日日玩愒，不觉过了四十余天。",""],["致诸弟","1842","","这几年写给四个弟弟的长信，讲的全是怎样读书、立志、有恒，收在本站下方。"],["《求阙斋课程》","1843","",""]]},
+
+ {p:"chengdu", yr:"1843", title:"入蜀主考", modern:"今四川成都", role:"四川乡试正考官",
+  body:["六月他被点为四川乡试正考官。出京走到保定就中了暑，一路扶病而行，到西安被陕西巡抚李星沅留在署中治了几天才好。八月初四到成都，九月下旬返程，十一月二十日回到京城。","考官照例有地方上的馈赠。他得了约一千两银子，寄回家里，并叮嘱拿出四百两分送给族中和亲戚里的穷人。此前他在京四年，日子一直紧巴巴的。"],
+  e:[["1843 六月","钦命充四川正考官。七月出都，途中病暑。"],["1843 八月初四","抵成都。途中已补授翰林院侍讲。"],["1843 九月二十一","由成都回程。十一月二十日抵京复命。"]],
+  w:[["《养身要言》","1843","一阳初动处，万物始生时。不藏怒焉，不宿怨焉。","入蜀道中所作。"]]},
+
+ {p:"jingshi", yr:"1844—1852", title:"十年七迁，然后上疏批评皇帝", modern:"今北京", role:"翰林院侍读，内阁学士，礼部侍郎，历署兵、工、刑、吏各部侍郎",
+  body:["此后几年他升得极快：侍读、庶子、侍讲学士，三十七岁升内阁学士兼礼部侍郎衔，位列二品。他写信告诉家里，湖南三十七岁做到二品的，本朝还没有过。三十九岁实授礼部右侍郎，后来又先后兼署兵部、工部、刑部、吏部的侍郎。","他利用在各部的机会研究典章、地理、兵制、钱粮，为日后办事打下了底子。他也留心人才：举人江忠源来访，谈完他对人说，这个人必定名满天下，但会以节烈而死。","咸丰皇帝即位后下诏求言。他连上几道奏疏谈用人、裁兵、民间疾苦，最出名的一道直接批评皇帝本人：琐碎而不识大体，好虚文而不务实际，骄矜而听不进话。年谱说皇帝优诏答之；笔记里则说皇帝气得把折子摔在地上，经大臣力劝才作罢。"],
+  e:[["1844","江忠源来见。作《五箴》自警。十二月转补翰林院侍读。"],["1845","五月升右庶子，九月升侍讲学士。夏天癣疾发作，从此终身未愈。"],["1847 六月","升授内阁学士兼礼部侍郎衔。"],["1849","正月升授礼部右侍郎。八月兼署兵部右侍郎。十一月闻祖父星冈公去世。"],["1850","道光帝去世。三月上《应诏陈言疏》。六月兼署工部左侍郎。这一年洪秀全在广西金田起事。"],["1851 四月","上《敬陈圣德三端预防流弊疏》。十二月上《备陈民间疾苦疏》。"],["1852 正月","兼署吏部左侍郎。六月奉命充江西乡试正考官，请准试后回籍省亲，离京南下。"]],
+  w:[["《五箴》","1844","少不自立，荏苒遂洎今兹。盖古人学成之年，而吾碌碌尚如斯也，不其戚矣！","立志、居敬、主静、谨言、有恒五条。"],["《原才》","1846","风俗之厚薄奚自乎？自乎一二人之心之所向而已。",""],["禀父母、致诸弟","1842—1849","","在京期间的家书。"]]},
+
+ {p:"xiangxiang", yr:"1852", title:"半路上接到母亲的死讯", modern:"今湖南双峰", role:"丁母忧",
+  body:["他离家已经十四年。七月二十五日走到安徽太湖县的小池驿，接到家信：母亲江太夫人已在六月十二日去世。他立刻换了丧服，改道回湖南。","这时太平军已经从广西打进湖南，正在围攻长沙。他绕道走，八月下旬才到家，九月把母亲安葬在屋后山上。","十二月十三日，他接到皇帝的寄谕：命他以在籍侍郎的身份帮同办理本省团练。他已经写好了恳请在家守丧的奏疏，准备托人代递。就在这时武昌失守的消息传来，好友郭嵩焘赶到他家，力劝他出山，又去说服了他的父亲。他把奏疏撕了。"],
+  e:[["1852 七月","行至安徽太湖小池驿闻讣，回籍奔丧。"],["1852 八月","过武昌，始闻太平军围攻长沙。月底抵家。"],["1852 九月","葬母。太平军以地道轰长沙城，不克。十月长沙围解，太平军北上陷岳州，十二月陷武昌。"],["1852 十二月","奉旨帮办团练。十七日启程，二十一日抵长沙。"]],
+  w:[]},
+
+ {p:"changsha", yr:"1853", title:"在长沙办团练，得了个“曾剃头”的名声", modern:"今湖南长沙", role:"在籍侍郎，帮办湖南团练",
+  body:["他在长沙设了审案局，专办各地的土匪、会党和溃兵，抓到就杀，不经州县，不拘成例。他自己上奏说，宁可得残忍严酷之名。长沙人给他起了个外号叫“曾剃头”。","他同时从湘乡等地招募乡勇，交给罗泽南、王錱这些读书人带领，在长沙天天操练。他看不上绿营的散漫，要求绿营和乡勇一起会操，又保举肯出力的满人军官塔齐布。这就得罪了整个长沙官场。","八月初六夜里，绿营的永顺兵鼓噪起来，先围了塔齐布的住处，又冲进他的公馆，刺伤了他的随从。他去敲隔壁巡抚衙门的门，巡抚才出来把兵遣散。他没有上奏告状，几天后带着自己的人离开长沙，去了衡州。"],
+  e:[["1853 正月","在长沙督办街团，编查保甲。设审案局。"],["1853 二月","调罗泽南、王錱的湘勇到长沙操练。识拔塔齐布。"],["1853 六月","专折奏明搜拿土匪、随时正法的办法。"],["1853 八月初六","永顺兵哗变，围攻公馆。十四日离开长沙，二十七日抵衡州。"]],
+  w:[]},
+
+ {p:"hengzhou", yr:"1853—1854", title:"在衡州造船练兵，皇帝怎么催都不动", modern:"今湖南衡阳", role:"帮办团练，筹建水师",
+  body:["到了衡州，他放开手脚做自己想做的事：把乡勇扩充成一支能出省作战的军队。陆军五百人一营，营官自己招哨官，哨官自己招什长，什长自己招勇丁，一层层都是同乡熟人，兵随将走。饷银比绿营高出一倍多。","江忠源写信告诉他：太平军的船在长江上来去自如，官军无人敢问，眼下最要紧的是办船炮。湖南没人见过水师，他就照着端午龙舟的样子试造，又请来广西的炮勇做教习，在衡州和湘潭各设一个船厂。彭玉麟、杨载福就是这时候被他提拔起来的。","这半年里，咸丰皇帝一再下旨催他出兵，先是援湖北，再是援安徽，口气越来越重，最后讥讽他：平时自夸才力无人能及，今日看你怎么办。他一概回奏：船炮未齐，不能出。他的老师吴文镕在黄州兵败自杀，好友江忠源在庐州城破投水，他都没有赶去。"],
+  e:[["1853 九月至十月","在衡州募勇扩军。十月奉旨带勇赴湖北，以船炮未备回奏。"],["1853 十一月","彭玉麟、杨载福来营。"],["1853 十二月","在衡州、湘潭设厂造船。与罗泽南更定陆军营制。江忠源在庐州殉难。"],["1854 正月","吴文镕在黄州兵败身死。二十八日，他率水陆一万七千人自衡州出发。"]],
+  w:[]},
+
+ {p:"changsha", yr:"1854", title:"靖港兵败，他跳进了湘江", modern:"今湖南长沙、湘潭、岳阳", role:"统领湘军东征",
+  body:["出师之前他发布了《讨粤匪檄》。檄文不谈忠于清廷，谈的是太平天国烧孔庙、废诗书，要把几千年的礼义人伦一扫而光，号召读书人起来保卫名教。","头几仗打得很糟。三月在岳州遇上大风，船被吹沉几十条，陆军又败。太平军趁势南下，占了长沙上游的湘潭和下游的靖港，把长沙夹在中间。他分兵两路：主力由塔齐布、彭玉麟去打湘潭，自己带四十条船、八百人去打靖港。","四月初二，靖港一战，水急风顺，战船收不住，被太平军乘势冲散。他竖起令旗，下令过旗者斩，士兵绕过旗子照逃。他羞愤之下跳了水，被幕僚章寿麟捞上来。回到长沙城外的船上，他写好了遗嘱，叫人去买棺材。就在这时湘潭的捷报到了：塔齐布和水师十战十捷，歼敌上万。","他活了下来，裁掉溃散的营头，整顿了两个月，再度出兵。"],
+  e:[["1854 二月","至长沙。发布《讨粤匪檄》。"],["1854 三月","岳州兵败，退回长沙。太平军占靖港、湘潭。"],["1854 四月初一","水陆军大破太平军于湘潭。初二日，靖港兵败，投水获救。"],["1854 四月至六月","上疏自请治罪，革职留用。裁汰溃勇，修造战船。"],["1854 七月","水陆并进，收复岳州，进入湖北。"]],
+  w:[["《讨粤匪檄》","1854","举中国数千年礼义人伦、诗书典则，一旦扫地荡尽。此岂独我大清之变，乃开辟以来名教之奇变。",""]]},
+
+ {p:"wuchang", yr:"1854", title:"攻下武昌，巡抚只当了七天", modern:"今湖北武汉，其后沿江东下", role:"署湖北巡抚，旋改兵部侍郎衔",
+  body:["八月二十三日，湘军攻克武昌和汉阳。这是太平军兴以来官军第一次收复省城。咸丰皇帝大喜，当即命他署理湖北巡抚。","七天之后，任命撤销了，只给了他一个兵部侍郎的空衔。野史说，军机大臣祁寯藻提醒皇帝：曾国藩以在籍侍郎的身份，一呼百应，从者万人，恐怕不是国家之福。不管这句话有没有人说过，此后六年，他一直是个没有地方实权的客军统帅，粮饷要向各省求告。","他顺江东下。十月，湘军在田家镇斩断太平军横江的铁锁，烧毁敌船四千多条，直抵九江城下。"],
+  e:[["1854 八月二十三","克复武昌、汉阳。赏二品顶戴，署理湖北巡抚。"],["1854 九月","上疏辞巡抚。改赏兵部侍郎衔，统军东下。"],["1854 十月十三","田家镇大捷，断横江铁锁。"],["1854 十一月","水陆进围九江。"]],
+  w:[["致诸弟","1854 八月十一日","","克武昌前在军中写的家信。"]]},
+
+ {p:"nanchang", yr:"1855—1857", title:"困在江西的两年多", modern:"今江西九江、南昌一带", role:"兵部侍郎衔，督办江西军务",
+  body:["九江久攻不下。太平军的石达开用小船引诱湘军的轻便战船冲进鄱阳湖，随即封住湖口，把湘军水师截成两半：能打的小船关在湖里，笨重的大船留在江上。十二月二十五日夜，太平军的小划子摸进江面放火，他的座船被夺，文书全丢。他换乘小船逃到陆营，想骑马冲进敌阵寻死，被罗泽南、刘蓉拉住。","此后他困守江西。太平军回头又占了武昌，石达开横扫江西，全省十三府有八府落入太平军手中，南昌几成孤城。他手下最得力的塔齐布病死在九江城下，罗泽南回援湖北战死武昌。他是客军，江西的官员处处掣肘，军饷经常断绝。他后来回忆这段日子说：听到春风怒号，心都要碎了；看见敌船上驶，就绕着屋子打转。","弟弟国华、国荃先后从湖南带兵来援，他才算缓过一口气。就在这时，父亲去世的消息到了。"],
+  e:[["1854 十二月","水师轻舟陷入鄱阳湖。二十五日夜湖口兵败，座船被夺。"],["1855","驻南康，后移南昌。二月太平军再陷武昌。七月塔齐布卒于九江军中。罗泽南率部回援湖北。"],["1856","三月罗泽南战死武昌。石达开连陷江西各府县。弟国华自湖北率军来援瑞州，国荃募吉字营攻吉安。秋，太平天国内讧。"],["1857 二月","初四日父亲竹亭公卒。十一日在瑞州军中闻讣，上疏后不等批复就回籍奔丧。"]],
+  w:[["谕纪鸿","1856 九月二十九夜","凡人多望子孙为大官，余不愿为大官，但愿为读书明理之君子。",""],["谕纪泽","1856","","在江西军中开始给十八岁的长子写信，教他读书写字。"]]},
+
+ {p:"xiangxiang", yr:"1857—1858", title:"在家守丧，把自己重新想了一遍", modern:"今湖南双峰", role:"丁父忧",
+  body:["他回到家，上疏请求在籍守制三年。朝廷只给了三个月假。他索性把几年来的委屈全写进奏折：没有地方实权，办不了事，筹不到饷，连关防印信都是木头刻的，被人疑心是假的。意思很明白，要他出来，就得给他督抚的位子。咸丰皇帝顺水推舟，准他在家终制。","这一年多是他一生的低谷。朝野都骂他不顾军事、要挟君父，左宗棠在长沙骂得最凶。他失眠，和弟弟、弟媳吵架。","慢慢地，他开始反省自己：从前总觉得自己本领大，看别人都不对，所以处处碰壁。他把老子、庄子的书拿出来读。后来他说，自己是在这段日子里“大悔大悟”的，从此知道自己毫无本领，凡事都看得见别人有几分道理。再出山时，他像换了一个人：到长沙先去拜访左宗棠，见了大小官员都主动登门。"],
+  e:[["1857 二月","回籍。请终制，奉旨给假三个月。"],["1857 六月","上疏沥陈办事艰难，仍请终制，奉旨允准，开去兵部侍郎缺。"],["1857—1858","居丧在家。九弟国荃在吉安军中，他写信教他带兵和处世。"],["1858 五月","浙江告急。六月初三日奉旨复出，初七日启程。"]],
+  w:[["致沅弟","1858 正月初四夜","",""],["致沅弟","1858 三月初六日","",""]]},
+
+ {p:"jianchang", yr:"1858—1860", title:"再出山：从江西到皖鄂边上", modern:"今江西南城、抚州，后至安徽宿松", role:"兵部侍郎衔，办理浙江、福建、安徽军务",
+  body:["复出后的头两年，他的任务一变再变：先是援浙，走到半路改成援闽，后来又要他入川堵截石达开，最后才定下来进攻安徽。他带着一支不大的队伍在江西东部的建昌、抚州驻扎，手里仍然没有地方实权。","十月，湘军悍将李续宾孤军深入，在庐州以南的三河镇被陈玉成、李秀成合围，全军六千人覆没。他的六弟国华也在军中，尸体过了几个月才找到，没有头。这是湘军建军以来最惨的一仗，湘乡一县处处招魂。","咸丰九年他到湖北黄州与胡林翼会面。胡林翼这时是湖北巡抚，有钱有粮，全力支持他，两人定下四路进兵安徽的计划。年底他移驻宿松，左宗棠、李元度、胡林翼都来过这里，后人说这是湘军领袖聚得最齐的一次。","咸丰十年闰三月，江南大营被太平军彻底击溃，苏州、常州相继失守。朝廷在东南再没有别的军队可用。四月，他被任命为署理两江总督。"],
+  e:[["1858 六月至九月","自湘乡出，经长沙、武昌、九江、南昌至河口。奉旨改援福建，九月驻建昌。"],["1858 十月初十","三河之败，李续宾、曾国华战死。"],["1859 正月","在建昌作《圣哲画像记》，列出他心目中古今三十二位圣哲。"],["1859 二月至六月","移驻抚州。六月湘军克景德镇。"],["1859 八月","至黄州与胡林翼会商。十月驻宿松。"],["1860 闰三月","江南大营溃败。四月左宗棠来宿松，同住二十余日。"],["1860 四月十九","赏加兵部尚书衔，署理两江总督。"]],
+  w:[["《圣哲画像记》","1859","文周孔孟，班马左庄，葛陆范马，周程朱张，韩柳欧曾，李杜苏黄，许郑杜马，顾秦姚王。","三十二人：文王、周公、孔子、孟子……到顾炎武、秦蕙田、姚鼐、王念孙。"],["谕纪泽","1858 七月二十一日","读书之法，看、读、写、作，四者每日不可缺一。",""],["谕纪泽","1860 闰三月初四日","","讲祖父星冈公的治家之法。"],["日记","1859—1860","","咸丰九年、十年的日记节选。"]]},
+
+ {p:"qimen", yr:"1860—1861", title:"祁门：把遗嘱写好放在枕边", modern:"今安徽祁门", role:"两江总督，钦差大臣督办江南军务",
+  body:["他把大营设在皖南山里的祁门。这地方四面环山，只有一条路通外面，幕僚们都说是“绝地”，李鸿章劝他移营，他不听。六月，朝廷把“署理”二字去掉，实授两江总督，又加钦差大臣，江南江北的军队都归他节制。办了八年军务，他终于有了地方实权。","八月，他派去守徽州的李元度不到十天就丢了城，祁门的东大门洞开。同一时间，英法联军打进了北京，咸丰皇帝逃往热河，谕旨要他派鲍超北上勤王。他左右为难，采纳李鸿章的主意，回奏请求指定由他或胡林翼亲自带兵北上，一来一回拖了一个月，和议已成，不必去了。","十月以后，太平军李世贤、黄文金几路逼近，最近的时候离大营只隔几十里。他身边只有三千人。他写好遗嘱，帐里悬着佩刀，幕僚们收拾行李偷偷上了船。他对大家说：想走的发三个月薪水，事后还可以回来。靠鲍超、张运兰拼死救援，祁门才保住。","第二年春天，祁门的粮道又被切断，他亲自带兵去打徽州，大败而回，又写了一次遗嘱。左宗棠在乐平打了胜仗，粮路重开。四月，他移营到长江边的东流。"],
+  e:[["1860 六月十一","抵祁门。二十四日实授两江总督，授钦差大臣。"],["1860 八月","李元度失徽州。英法联军入京，奉旨派兵北援。"],["1860 十月至十二月","太平军数路进逼祁门，大营几次危急。"],["1861 二月至三月","粮道断绝。三月进攻徽州失利。左宗棠在乐平获胜。"],["1861 四月初一","移驻东流，就近指挥安庆之围。"]],
+  w:[["致澄弟","1860 十二月二十四日","","祁门最危急时写给在家的四弟。"],["致沅弟季弟","1860 九月二十四日","",""],["日记","1860—1861","","咸丰十年、十一年的日记节选。"]]},
+
+ {p:"anqing", yr:"1861—1864", title:"安庆：打下金陵之前的三年", modern:"今安徽安庆", role:"两江总督，节制四省军务，协办大学士",
+  body:["安庆是金陵上游的门户。九弟国荃带兵在城外挖了两道长壕，一道围城，一道拒援，围了一年多。陈玉成几次来救都打不进去。咸丰十一年八月初一，湘军轰塌城墙，安庆克复，守军一万多人全部战死或被杀。","他把大营搬进安庆。这三年里，朝局大变：咸丰皇帝死在热河，慈禧与恭亲王发动政变。新朝廷给了他前所未有的权力，节制江苏、安徽、江西、浙江四省军务。他保举李鸿章组建淮军去守上海，左宗棠去打浙江，自己坐镇中间，让国荃沿江直取金陵。","同治元年秋天是最难熬的。国荃的两万人孤军扎在金陵城外的雨花台，军中大疫，李秀成带着号称二十万人、用上了洋枪洋炮来攻，打了四十六天。他在安庆整夜睡不着，写信劝弟弟退兵，弟弟不肯。国荃守住了。小弟国葆却在这年冬天病死在军营里。","也是在安庆，他办了一个内军械所，找来徐寿、华蘅芳这些懂算学的人，试造蒸汽机和轮船。机器试转成功那天，他在日记里写：洋人的智巧，我们中国人也能做到。他又见了从美国留学回来的容闳，给了他六万八千两银子，让他去美国买造机器的机器。"],
+  e:[["1861 八月初一","克复安庆，随后移驻。这个月才得知咸丰皇帝已于七月十七日去世。八月二十六日胡林翼病逝于武昌。"],["1861 十月","奉旨统辖江苏、安徽、江西、浙江四省军务，巡抚、提镇以下悉归节制。十二月设安庆内军械所。"],["1862","正月授协办大学士。三月李鸿章率淮军乘轮船赴上海。五月国荃进扎雨花台。七月徐寿等试制蒸汽机成功。"],["1862 闰八月至十月","李秀成、李世贤围攻雨花台大营四十六日，不克。十一月十八日季弟国葆病卒于军。"],["1863","容闳来见，受命赴美购办机器。年底内军械所造出一艘小火轮。"],["1864 正月","国荃攻占天保城，金陵合围。六月十六日，轰塌太平门城墙，攻入金陵。"]],
+  w:[["致沅弟季弟","1862 五月十五日","日中则昃，月盈则亏，吾家亦盈时矣。",""],["致沅弟","1863 三月二十四日","自古圣贤豪杰、文人才士，其志事不同，而其豁达光明之胸大略相同。",""],["致沅弟","1864 六月十六日","","金陵城破当天写的信，还在叮嘱弟弟督攻时不要来回奔走、太过劳累。"],["谕纪泽、纪鸿","1862—1863","","在安庆写给两个儿子的信。"],["日记","1862—1864","","同治元年至三年的日记节选。"]]},
+
+ {p:"jinling", yr:"1864—1865", title:"进了金陵，先做三件事：杀人、裁军、开科", modern:"今江苏南京", role:"两江总督，一等毅勇侯",
+  body:["六月二十五日他从安庆赶到金陵。城里大火烧了几天，湘军抢掠一空。朝廷论功，封他为一等侯，世袭罔替，他是清代文臣封侯的第一人；国荃封一等伯。","被俘的忠王李秀成在囚笼里写了几万字的自述。他亲自审了几次，删改了自述里的一些段落，没有按朝廷的意思押送北京，七月初六就在金陵把李秀成杀了。这件事后来一直有人议论。","他清楚自己的处境。湘军号称十二万，都只听他一人的；国荃攻下金陵后居功自傲，已经招来朝廷的申斥和满朝的侧目；天京的金银去向不明，幼天王又逃脱了。他主动奏请裁撤湘军，头一批就裁了两万五千人，又让国荃称病开缺，回湖南老家。","他做的另一件事是修复江南贡院，当年冬天就补行了停了十二年的乡试，两万多读书人涌进金陵。他还设了金陵书局，刻印经史。"],
+  e:[["1864 六月二十五","抵金陵。二十九日奉旨加太子太保，封一等侯，世袭罔替。"],["1864 七月初六","处死李秀成。奏请裁撤湘军。"],["1864 九月","国荃开缺回籍。他自安庆移驻金陵。"],["1864 十一月","江南乡试补行。"],["1865 四月","僧格林沁在山东曹州被捻军击杀。五月奉旨赴山东督师剿捻。"]],
+  w:[["谕纪鸿","1864 七月初九日","",""],["致沅弟","1864 八月初四日","","谈修贡院的事。"]]},
+
+ {p:"xuzhou", yr:"1865—1867", title:"剿捻：他承认自己打不动了", modern:"今江苏徐州，后至山东济宁、河南周口", role:"钦差大臣，督办直隶、山东、河南三省军务",
+  body:["捻军全是骑兵，一天能跑一二百里，官军追不上。蒙古亲王僧格林沁就是追了几年、人困马乏，中了埋伏死的。朝廷急了，命他北上，三省的旗兵、绿营、勇营都归他节制。","他再三推辞，推不掉。湘军已经裁得差不多了，他带的主要是李鸿章的淮军，调动起来并不顺手。他不肯跟着捻军跑，定下的办法是“以静制动”：在徐州、济宁、周家口、临淮四处屯驻重兵，一处有警，三处往援；又沿着运河、沙河、贾鲁河筑长墙，想把捻军圈在一个角落里。","办法是对的，但他没能看到它见效。同治五年八月，捻军在开封附近冲破了河防。弹劾他的奏章接连不断，朝廷的谕旨也严厉起来。他病得厉害，上疏请求开缺，并注销侯爵。朝廷让他回两江总督本任，由李鸿章接手剿捻。两年后李鸿章用的还是他这套办法，把捻军平定了。"],
+  e:[["1865 五月至闰五月","奉命北上，自金陵启行，驻临淮。八月移驻徐州。"],["1866 二月至三月","移驻济宁，巡视运河、黄河防务。"],["1866 八月","至周家口。捻军突破沙河、贾鲁河防线东走。"],["1866 十月至十一月","因病请开各缺、注销爵位。奉旨回两江总督本任，李鸿章为钦差大臣。"],["1867 正月至三月","离周家口，经徐州南归，三月初六日回到金陵。国荃时任湖北巡抚，剿捻亦败。"]],
+  w:[["谕纪泽、纪鸿","1866","","在济宁、周家口军中写给儿子的信。"],["致澄弟","1866","",""],["致沅弟","1867 正月初二日","处之泰然，行所无事。","国荃在湖北的官署失火，他劝弟弟不要疑神疑鬼。"],["日记","1865—1866","","同治四年、五年的日记节选。"]]},
+
+ {p:"jinling", yr:"1867—1868", title:"回到金陵：造出了第一艘轮船", modern:"今江苏南京", role:"两江总督，体仁阁大学士，后转武英殿大学士",
+  body:["回任两江，他的官衔升到了大学士。他把力气花在恢复战后的地方上：整顿盐政，清理田赋，招垦荒地。","他也看得见更远的麻烦。有天晚上他和幕僚赵烈文闲谈，说京城里明火执仗的案子不断，乞丐成群，恐怕要出大乱子。赵烈文说：天下治安一统久矣，势必分剖；我估计抽心一烂，根本颠仆，不出五十年。他听了皱着眉头，很久才说：那我只求早点死。这段话记在赵烈文的日记里。四十四年后清朝亡了。","容闳买的机器运到了上海，并入李鸿章办的江南制造总局。同治七年，局里造出了第一艘轮船。船开到金陵，他亲自登船试航，给它取名“恬吉”，取四海波恬、厂务安吉的意思。他上奏说：中国自强之道，或基于此。"],
+  e:[["1867 三月","回金陵任。五月补授体仁阁大学士，仍留两江总督任。"],["1867 六月","与赵烈文夜谈时局。"],["1868 四月","转武英殿大学士。闰四月巡视扬州、苏州，到上海视察江南制造总局。"],["1868 七月","调补直隶总督。八月“恬吉”号驶抵金陵，登船试航。"],["1868 十一月初四","自金陵启程北上。"]],
+  w:[["致欧阳夫人","1867 五月初五日","","文集里少见的一封写给妻子的信，叮嘱家里不可奢侈，要准备日后回乡下过日子。"],["谕纪泽","1867","",""],["日记","1868","","同治七年的日记节选。"]]},
+
+ {p:"baoding", yr:"1869—1870", title:"直隶总督：进京见了太后", modern:"今河北保定", role:"直隶总督，武英殿大学士",
+  body:["同治七年十二月他到了北京。离开这座城市已经十六年。慈禧太后、慈安太后和十三岁的同治皇帝在养心殿连着召见了他三次，问的是裁军、练兵、洋务。新年的宫廷宴会上，他排在汉大臣的首位。","他对这几次召见很失望。回去后他对赵烈文说：两宫的才地平常，见面没有一句要紧话；军机大臣里恭亲王聪明而晃荡不能立足，文祥正派而规模狭隘，其余更不用提。","直隶总督驻保定。他到任后清理了积压多年的四万多件讼案，订了《清讼事宜十条》；又整顿练军，修治永定河。可是他的身体垮得很快：右眼失明，左眼也昏花，经常眩晕。同治九年五月他请了病假。假还没满，天津出事了。"],
+  e:[["1868 十二月十三","抵京。十四、十五、十六日连续召对于养心殿。"],["1869 正月","十六日入宴，居汉大臣之首。二十日出京，月底到保定接印。"],["1869","清理讼案，整顿吏治，筹议练军，勘修永定河。"],["1870 春","右目失明，眩晕时作。五月请假养病。"]],
+  w:[["日记","1868 十二月至 1869 正月","","记下了几次召见的问答。"]]},
+
+ {p:"tianjin", yr:"1870", title:"天津教案：一生名声毁在这里", modern:"今天津", role:"直隶总督，查办天津教案",
+  body:["这年夏天，天津盛传法国天主教堂的育婴堂迷拐幼儿、挖眼剖心。五月二十三日，上万百姓聚在教堂外，法国领事丰大业向知县开枪，打伤了知县的随从，当场被民众打死。人群接着烧了教堂、育婴堂、领事馆，杀了二十个外国人，其中有十名修女。法国军舰开到大沽口，七国公使联名抗议。","朝廷命他去天津查办。他知道这是个死局，动身前给两个儿子写了遗嘱，头一句是：我即日前赴天津，查办殴毙洋人、焚毁教堂一案。外国性情凶悍，津民习气浮嚣，俱难和协。","他到天津查了一遍，确认挖眼剖心并无实据。国家刚打完十几年内战，他认定不能再和法国开仗。最后的处置是：处死为首的二十人，充军二十五人，天津知府、知县发配黑龙江，赔银约五十万两，派崇厚去法国道歉。","消息传出，舆论大哗。京城的清流骂他卖国，湖南同乡把他在北京湖广会馆题的匾额砸了。他自己在信里说：外惭清议，内疚神明。这时两江总督马新贻在金陵被人刺死，朝廷调他回去，直隶总督交给了李鸿章。"],
+  e:[["1870 五月二十三","天津教案发生。"],["1870 六月初四","在保定写下遗嘱。初十日抵天津。"],["1870 六月至八月","查办教案，奏报结案办法。"],["1870 七月二十六","两江总督马新贻遇刺。八月初三日奉旨调补两江总督。"],["1870 九月","交卸直隶总督，进京陛见。十月初十日在京过六十岁生日。"]],
+  w:[["谕纪泽、纪鸿","1870 六月初四日","余即日前赴天津，查办殴毙洋人、焚毁教堂一案。外国性情凶悍，津民习气浮嚣，俱难和协。","赴津前的遗嘱，后面附了他写的《忮》《求》二诗。"],["日记","1870","","同治九年五月、九月的日记节选。"]]},
+
+ {p:"jinling", yr:"1870—1872", title:"最后一年多：送一批孩子去留洋", modern:"今江苏南京", role:"两江总督，武英殿大学士",
+  body:["他带着病回到金陵，先审了刺杀马新贻的案子，照原拟把刺客张汶祥处死结案。","这年冬天，他给两个儿子写了四条日课，要他们每天夜里拿来对照：慎独则心安，主敬则身强，求仁则人悦，习劳则神钦。他说这是自己几十年得来的，写下来留给子侄。","同治十年七月，他和李鸿章联名上奏，采纳容闳的建议，请朝廷选派聪颖幼童赴美国留学，每年三十名，四年一百二十名，学成回国。这是中国第一次官派留学生。秋天他抱病出巡，从扬州一路看到上海、吴淞，检阅了新造的几艘轮船。","同治十一年正月，他几次突然说不出话。二月初四日午后，他由纪泽陪着在总督署西花园散步，忽然连呼脚麻，被扶进屋里，端坐了三刻钟，戌时去世，六十二岁。朝廷辍朝三日，追赠太傅，谥“文正”。这年夏天，第一批三十名幼童从上海登船赴美，其中有十二岁的詹天佑。"],
+  e:[["1870 闰十月二十","抵金陵，接两江总督印。"],["1870 十一月","作日课四条示二子。"],["1871 二月","马新贻案审结。"],["1871 七月初三","与李鸿章会奏选派幼童赴美肄业。"],["1871 八月至十月","出省巡阅，至扬州、清江、常州、苏州、松江、上海、吴淞。"],["1872 二月初四","卒于两江总督署。赠太傅，谥文正。灵柩运回湖南，葬于长沙。"]],
+  w:[["日课四条","1870 十一月初二日","一曰慎独则心安，二曰主敬则身强，三曰求仁则人悦，四曰习劳则神钦。",""],["《忮》《求》诗","1870","善莫大于恕，德莫凶于妒。",""]]}
+];
+
+/* 人物：q 是在作品里常见的称呼；m 是 [站序号(从0起), 交集] */
+const PEOPLE=[
+ {n:"曾国荃",r:"九弟，字沅甫",q:"沅弟",i:"小他十三岁，脾气刚烈，打仗专啃硬骨头，人称“曾铁桶”。安庆、金陵都是他打下来的。国藩写给他的信最多，一半在夸，一半在劝他收敛。",
+  m:[[4,"随父亲进京，在大哥寓所读书一年多。"],[12,"募吉字营，围攻吉安。"],[13,"在吉安军中，大哥写信教他带兵。"],[16,"围安庆，克之；进扎雨花台，苦守四十六日；攻破金陵。"],[17,"封一等伯。被劝开缺回籍。"],[18,"任湖北巡抚剿捻，兵败。大哥去信安慰。"]]},
+ {n:"曾国潢",r:"四弟，字澄侯",q:"澄弟",i:"五兄弟里只有他一直留在家乡管家。国藩给他的信多是叮嘱治家：不要盖大屋，不要干预地方公事。",
+  m:[[6,"到京城住过一年多。"],[15,"祁门危急时，大哥写信给他交代家事。"],[18,"大哥在剿捻军中来信，谈家里的桥和墓志。"]]},
+ {n:"曾国华",r:"六弟，字温甫",q:"温弟",i:"过继给叔父为后。自视甚高，科场不顺。",
+  m:[[6,"在京读书、应顺天乡试。"],[12,"从湖北带兵来江西救大哥。"],[14,"随李续宾战死三河。"]]},
+ {n:"曾国葆",r:"季弟，字季洪",q:"季弟",i:"最小的弟弟。",
+  m:[[8,"募湘勇一营驻长沙。向大哥推荐了彭玉麟、杨载福。"],[16,"与九哥同围安庆、金陵，同治元年冬病死军中。"]]},
+ {n:"曾纪泽",r:"长子（实为次子），字劼刚",q:"纪泽",i:"父亲教他读书写字，一封信一封信地教。他后来自学英文，出使英法俄，从俄国手里争回了伊犁的大片土地。",
+  m:[[3,"出生当天，父亲启程进京。"],[4,"幼时随母进京。"],[12,"十八岁，父亲开始给他写信论学。"],[14,"成婚。父亲来信讲看、读、写、作。"],[22,"父亲去世时陪在身边。"]]},
+ {n:"曾纪鸿",r:"次子，字栗諴",q:"纪鸿",i:"喜欢算学，三十三岁早逝。",
+  m:[[6,"生于京师。"],[12,"九岁，父亲写信说“不愿为大官，但愿为读书明理之君子”。"],[18,"到父亲军中随侍。"]]},
+ {n:"欧阳夫人",r:"妻子，衡阳欧阳凝祉之女",q:"欧阳夫人",i:"丈夫在外带兵十几年，她在乡下带着儿女纺纱做鞋。",
+  m:[[0,"1833年成婚。"],[4,"带纪泽进京。"],[19,"到金陵。丈夫写信要她带头勤俭。"]]},
+ {n:"唐鉴",r:"理学前辈，号镜海",q:"唐",i:"",
+  m:[[4,"教他以朱子为宗，检身之要在“不自欺”。"],[6,"他为唐鉴校刻《学案小识》。"]]},
+ {n:"倭仁",r:"师友，蒙古正红旗人",q:"倭",i:"以日记检点身心著称。后来官至大学士，是反对洋务的领袖，天津教案时站在他的对立面。",
+  m:[[4,"相约写日记，互相批阅。"]]},
+ {n:"江忠源",r:"朋友，湘军的先声",q:"江",i:"湖南新宁人，最早带乡勇出省作战。",
+  m:[[6,"来访。国藩说他“必立名天下，然当以节烈死”。"],[9,"来信力主先办船炮。年底在庐州城破投水死。"]]},
+ {n:"罗泽南",r:"湘军创建者之一，理学家",q:"罗",i:"湘乡的教书先生，带着自己的学生上阵，李续宾、王錱都出自他门下。",
+  m:[[8,"率湘勇到长沙。"],[9,"共定陆军营制。"],[12,"湖口败后劝住国藩；回援湖北，战死武昌。"]]},
+ {n:"塔齐布",r:"湘军大将，满洲镶黄旗人",q:"塔",i:"",
+  m:[[8,"被国藩从绿营里识拔出来。"],[10,"湘潭大捷的主将。"],[12,"久攻九江不下，呕血而死。"]]},
+ {n:"胡林翼",r:"湖北巡抚，字润芝",q:"胡",i:"湘军的后勤总管，也是国藩与朝廷、与各省督抚之间的调停人。时人并称“曾胡”。",
+  m:[[14,"在黄州会面，定四路图皖之策；常到宿松议事。"],[15,"力主他出任两江总督。"],[16,"安庆克复二十多天后病逝。"]]},
+ {n:"左宗棠",r:"字季高",q:"左",i:"才气极高，脾气极大。国藩举荐他独当一面，他后来却因幼天王的事与国藩绝交，至死没有再通信。国藩去世，他送的挽联写：谋国之忠，知人之明，自愧不如元辅。",
+  m:[[7,"在长沙巡抚幕中主持守城。"],[13,"国藩丁忧，他在长沙痛骂。"],[14,"到宿松同住二十多天。"],[15,"乐平一战，救了祁门的粮道。"],[17,"因奏报幼天王下落，两人失和。"]]},
+ {n:"李鸿章",r:"门生，字少荃",q:"少荃",i:"国藩会试同年李文安的儿子，早年在京城就跟他学过文章。",
+  m:[[14,"入幕。"],[15,"劝他移出祁门；因李元度事负气离开，后来又回来。"],[16,"奉命组建淮军，赴上海。"],[18,"接替他剿捻。"],[21,"接任直隶总督，了结教案。"],[22,"联名奏请派幼童留美。"]]},
+ {n:"彭玉麟",r:"湘军水师统帅，字雪琴",q:"雪琴",i:"",
+  m:[[9,"到衡州投军，被提拔带水师。"],[10,"湘潭水战获胜。"],[12,"湖口败后重整内湖水师。"]]},
+ {n:"李元度",r:"幕僚，字次青",q:"次青",i:"靖港、湖口最狼狈的时候都陪在国藩身边。",
+  m:[[10,"靖港败后守在他身边。"],[12,"在江西带平江勇苦撑。"],[15,"失徽州。国藩不顾众人劝阻上疏弹劾，晚年一直为此歉疚。"]]},
+ {n:"郭嵩焘",r:"朋友，儿女亲家",q:"郭",i:"后来是中国第一位驻外公使。",
+  m:[[2,"同游长沙；同年出都。"],[7,"劝他墨绖出山。"]]},
+ {n:"刘蓉",r:"朋友，儿女亲家，字孟容",q:"刘",i:"",
+  m:[[1,"在长沙初识。"],[12,"湖口败后与罗泽南一起拉住他。"]]},
+ {n:"赵烈文",r:"幕僚，字惠甫",q:"惠甫",i:"他的《能静居日记》记下了许多国藩私下的谈话。",
+  m:[[16,"入幕。"],[17,"在金陵见证城破前后。"],[19,"夜谈，说清朝“不出五十年”。"],[20,"听他评论两宫和军机大臣。"]]},
+ {n:"容闳",r:"第一个毕业于美国大学的中国人",q:"容",i:"",
+  m:[[16,"到安庆见国藩，受命赴美采购机器。"],[19,"机器运回，并入江南制造总局。"],[22,"提出幼童留美计划，被采纳。"]]},
+ {n:"李秀成",r:"太平天国忠王",q:"李秀成",i:"",
+  m:[[14,"与陈玉成合击三河。"],[16,"率大军围攻雨花台四十六日。"],[17,"被俘，写下数万字自述，被处死。"]]},
+ {n:"咸丰帝",r:"1850—1861年在位",q:"文宗",i:"用他，又一直不肯把地方实权给他。",
+  m:[[6,"即位求言。国藩上疏批评他。"],[9,"一再催他出兵，语带讥讽。"],[11,"任命他署湖北巡抚，七天后收回。"],[13,"准他在家终制。"],[15,"江南大营溃后，终于授他两江总督。"],[16,"死于热河。"]]},
+ {n:"慈禧太后",r:"同治帝生母",q:"太后",i:"",
+  m:[[16,"政变掌权后，命他节制四省。"],[20,"在养心殿三次召见。"],[21,"命他查办天津教案。"]]}
+];
+
+/* ---------- 底图 ---------- */
+const K=40,KX=K*0.866;
+const X=lon=>(lon-101)*KX, Y=lat=>(41-lat)*K;
+const NS="http://www.w3.org/2000/svg";
+const el=(t,a={},txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;return e;};
+const poly=pts=>pts.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+
+const COAST=[[122.2,41.2],[121.6,40.8],[121.0,40.8],[119.6,39.9],[118.0,39.2],[117.7,38.6],[118.3,38.0],[119.0,37.75],[119.0,37.2],[119.6,37.1],[120.2,37.6],[120.75,37.83],[121.4,37.55],[122.5,37.4],[122.5,36.95],[121.4,36.7],[120.7,36.4],[120.3,36.05],[119.6,35.4],[119.2,34.75],[120.3,34.0],[120.9,33.0],[121.6,32.1],[121.9,31.7],[121.9,30.9],[121.2,30.65],[120.6,30.35],[121.3,30.25],[122.0,29.9],[121.9,29.2],[121.6,28.3],[120.9,27.9],[120.2,27.0],[119.6,26.0],[119.0,25.2],[118.2,24.5],[117.3,23.7],[116.7,23.3],[115.4,22.7],[114.2,22.35],[113.6,22.7],[113.2,22.0],[111.8,21.7],[110.6,21.2],[110.5,20.4],[110.1,20.25],[109.75,20.9],[109.7,21.5],[109.1,21.5],[108.3,21.65],[107.9,21.5],[107.0,20.9],[106.5,20.0],[105.7,19.0],[106.5,17.3]];
+const LAND=[[100,41.2],...COAST,[100,17.3]];
+const HAINAN=[[109.2,19.85],[109.6,20.0],[110.1,20.08],[110.7,20.05],[111.0,19.65],[110.55,18.8],[110.0,18.4],[109.5,18.2],[108.7,18.5],[108.63,19.2]];
+const TAIWAN=[[121.5,25.3],[122.0,25.0],[121.6,24.0],[121.3,23.0],[120.85,21.95],[120.2,22.9],[120.15,23.8],[120.9,24.9]];
+const HUANGHE=[[100,35.4],[102.0,35.9],[103.8,36.05],[104.6,37.4],[106.3,38.5],[107.0,40.3],[107.6,40.8],[110.0,40.6],[111.2,40.2],[111.0,39.2],[110.6,38.0],[110.5,36.9],[110.45,36.15],[110.3,34.6],[111.2,34.8],[112.5,34.85],[113.7,34.95],[114.4,34.95],[115.3,35.5],[116.1,35.9],[117.0,36.7],[118.0,37.3],[119.0,37.75]];
+const CHANGJIANG=[[100,26.6],[101.8,26.6],[102.9,26.9],[103.6,27.9],[104.6,28.77],[105.4,28.9],[106.55,29.56],[107.4,29.7],[108.4,30.8],[109.5,31.02],[110.6,30.95],[111.3,30.7],[112.2,30.3],[112.9,29.8],[113.1,29.45],[113.9,29.95],[114.3,30.57],[114.9,30.38],[115.5,29.85],[116.0,29.75],[116.6,30.0],[117.05,30.5],[117.8,30.95],[118.37,31.33],[118.75,32.08],[119.45,32.2],[120.3,31.95],[121.0,31.75],[121.9,31.6]];
+const MINJIANG=[[103.6,31.6],[103.6,31.0],[103.85,30.05],[103.77,29.57],[104.6,28.77]];
+
+const svg=document.getElementById("map");
+svg.append(el("path",{class:"land",d:poly(LAND)+" Z"}));
+svg.append(el("path",{class:"land",d:poly(HAINAN)+" Z"}));
+svg.append(el("path",{class:"land",d:poly(TAIWAN)+" Z"}));
+svg.append(el("path",{class:"river",d:poly(HUANGHE)}));
+svg.append(el("path",{class:"river",d:poly(CHANGJIANG)}));
+svg.append(el("path",{class:"river minor",d:poly(MINJIANG)}));
+svg.append(el("text",{class:"rlabel",x:X(108.3),y:Y(39.6)},"黄河"));
+svg.append(el("text",{class:"rlabel",x:X(109.4),y:Y(31.75)},"长江"));
+svg.append(el("text",{class:"rlabel",x:X(119.0),y:Y(19.6)},"南海"));
+svg.append(el("text",{class:"rlabel",x:X(121.6),y:Y(34.6)},"黄海"));
+/* 比例尺：纬度 1° ≈ 111 公里 */
+const sc=el("g",{class:"scale",transform:`translate(${X(101.6)},${Y(18.6)})`});
+const L500=500/111*K;
+sc.append(el("line",{x1:0,y1:0,x2:L500,y2:0}),el("line",{x1:0,y1:-4,x2:0,y2:4}),el("line",{x1:L500,y1:-4,x2:L500,y2:4}),el("text",{x:L500/2,y:-8,"text-anchor":"middle"},"500 公里"));
+svg.append(sc);
+
+/* ---------- 路线 ---------- */
+const gBase=el("g"),gRoute=el("g"),gPts=el("g");
+svg.append(gBase,gRoute,gPts);
+const segs=[];
+for(let i=1;i<STOPS.length;i++){
+  const a=PLACES[STOPS[i-1].p], b=PLACES[STOPS[i].p];
+  const x1=X(a.lon),y1=Y(a.lat),x2=X(b.lon),y2=Y(b.lat);
+  const dx=x2-x1,dy=y2-y1,mx=(x1+x2)/2-dy*0.13,my=(y1+y2)/2+dx*0.13;
+  const d=`M${x1.toFixed(1)} ${y1.toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+  gBase.append(el("path",{class:"route-base",d}));
+  const p=el("path",{class:"route",d,pathLength:1});
+  gRoute.append(p);segs.push(p);
+}
+const visitsOf=key=>STOPS.map((s,i)=>s.p===key?i:-1).filter(i=>i>=0);
+const ptEls={};
+for(const key in PLACES){
+  const p=PLACES[key],g=el("g",{class:"pt",tabindex:0,role:"button","aria-label":p.n,transform:`translate(${X(p.lon).toFixed(1)},${Y(p.lat).toFixed(1)})`});
+  g.append(el("circle",{class:"ring",r:7}),el("circle",{class:"dot",r:6}),el("circle",{class:"hit",r:16}),el("text",{x:p.lab[0],y:p.lab[1],"text-anchor":p.lab[2]},p.n));
+  /* 多次到访的地方：再点一次跳到下一次到访 */
+  const pick=()=>{const v=visitsOf(key);go(v.find(i=>i>cur)??v[0]);};
+  g.addEventListener("click",pick);
+  g.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick();}});
+  gPts.append(g);ptEls[key]=g;
+}
+
+/* ---------- 年表与正文 ---------- */
+const strip=document.getElementById("strip"),detail=document.getElementById("detail");
+const tabs=STOPS.map((s,i)=>{
+  const b=document.createElement("button");
+  b.type="button";b.id="stop-"+(i+1);
+  b.innerHTML=`<span class="yr">${s.yr}</span><span class="pl">${PLACES[s.p].n}</span>`;
+  b.addEventListener("click",()=>go(i));
+  strip.append(b);return b;
+});
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const ORD=["一","二","三","四","五","六","七","八","九"];
+let cur=0;
+function go(i){
+  cur=Math.max(0,Math.min(STOPS.length-1,i));
+  const s=STOPS[cur],pl=PLACES[s.p],v=visitsOf(s.p);
+  tabs.forEach((b,j)=>{b.setAttribute("aria-current",j===cur?"true":"false");b.classList.toggle("past",j<cur);});
+  const t=tabs[cur];
+  strip.scrollTo({left:t.offsetLeft-strip.offsetLeft-strip.clientWidth/2+t.offsetWidth/2,behavior:"smooth"});
+  segs.forEach((p,j)=>{p.classList.toggle("on",j<cur);p.classList.toggle("now",j===cur-1);});
+  if(cur>0)gRoute.append(segs[cur-1]);
+  const seen=new Set(STOPS.slice(0,cur+1).map(x=>x.p));
+  for(const k in ptEls){ptEls[k].classList.toggle("seen",seen.has(k));ptEls[k].classList.toggle("now",k===s.p);}
+  gPts.append(ptEls[s.p]);
+  const visits=v.length>1?`<div class="visits"><span>一生${ORD[v.length-1]}次到${pl.n}：</span>${v.map(j=>`<button type="button" data-go="${j}" aria-current="${j===cur}">${STOPS[j].yr}</button>`).join("")}</div>`:"";
+  detail.innerHTML=`
+    <div class="nav">
+      <span class="count">第 ${cur+1} 站 / 共 ${STOPS.length} 站</span>
+      <span class="btns"><button type="button" data-go="${cur-1}" ${cur===0?"disabled":""}>上一站</button><button type="button" data-go="${cur+1}" ${cur===STOPS.length-1?"disabled":""}>下一站</button></span>
+    </div>
+    <div class="head">
+      <div class="seal" aria-hidden="true">${pl.n}</div>
+      <div>
+        <h2>${esc(s.title)}</h2>
+        <p class="meta">${s.yr} · ${esc(s.modern)}<br>${esc(s.role)}</p>
+      </div>
+    </div>
+    ${visits}
+    <div class="body">${s.body.map(p=>`<p>${esc(p)}</p>`).join("")}</div>
+    <h3>这里发生的事</h3>
+    <ul class="events">${s.e.map(x=>`<li><span class="when">${esc(x[0])}</span><span>${esc(x[1])}</span></li>`).join("")}</ul>
+    ${s.w.length?`<h3>在这里写下的</h3>
+    <ul class="works">${s.w.map(w=>`<li><span class="wt">${esc(w[0])}</span><span class="wy">${esc(w[1])}</span><blockquote>${esc(w[2])}</blockquote>${w[3]?`<p class="wn">${esc(w[3])}</p>`:""}</li>`).join("")}</ul>`:""}
+    <section class="full" id="full"></section>
+    <p class="hint">键盘左右方向键也可以切换。</p>`;
+  view="stop";markPeople(-1);renderFull();
+}
+
+/* ---------- 全集：works.json 按站存放诗词全文 ---------- */
+let WORKS=null,PROSE=null,view="stop",INDEX=[];
+/* 诗词条目是 [题, 文]；散文条目是 [题, 文, 是否带标点] */
+const wkHTML=(w,k)=>`<details class="wk" data-k="${k}"><summary><span>${esc(w[0])}${w[2]===0?`<i class="raw">无标点</i>`:""}</span></summary><div class="tx${w.length>2?" pr":""}">${esc(w[1])}</div></details>`;
+const listHTML=(arr,pre)=>`<div class="wl">${arr.map((w,j)=>wkHTML(w,pre+j)).join("")}</div>`;
+function renderFull(){
+  const box=document.getElementById("full");if(!box)return;
+  if(WORKS===null){box.innerHTML=`<h3>这一站的原文</h3><p>正在载入原文…</p>`;return;}
+  if(WORKS===false){box.innerHTML=`<h3>这一站的原文</h3><p>原文没有载入成功，刷新页面再试一次。</p>`;return;}
+  const w=WORKS.s[cur],pw=PROSE?PROSE.s[cur]:[];
+  if(!w.p.length&&!w.c.length&&!pw.length){box.innerHTML=`<h3>这一站的原文</h3><p>${PROSE?"这一站没有可以归入的原文。":"原文还在载入…"}</p>`;return;}
+  const raw=pw.filter(x=>x[2]===0).length;
+  const cnt=[w.c.length&&`年谱 ${w.c.length} 年`,pw.length&&`家书、日记、文章 ${pw.length} 篇`].filter(Boolean).join("，");
+  box.innerHTML=`<h3>这一站的原文</h3>
+    <p>${cnt}${PROSE?"":"，文章还在载入"}，点题目读全文。年谱是这几年的原文；家书和日记按所署的日期归入本站。${raw?`文章里有 ${raw} 篇原书没有标点。`:""}</p>
+    <input type="search" id="flt" placeholder="在本站篇目里找" aria-label="在本站篇目里找">
+    ${w.c.length?`<h4>年谱原文</h4>${listHTML(w.c,"c")}`:""}
+    ${pw.length?`<h4>家书、日记、文章</h4>${listHTML(pw,"w")}`:""}`;
+  document.getElementById("flt").addEventListener("input",e=>filterList(box,e.target.value.trim()));
+}
+function filterList(box,q){
+  box.querySelectorAll(".wk").forEach(d=>{d.hidden=!!q&&!d.textContent.includes(q);});
+}
+function showBio(){
+  view="bio";markPeople(-1);
+  tabs.forEach(b=>b.setAttribute("aria-current","false"));
+  for(const k in ptEls)ptEls[k].classList.remove("now");
+  detail.innerHTML=`
+    <div class="head"><div class="seal" aria-hidden="true">传记</div><div>
+      <h2>《清史稿》本传</h2><p class="meta">《清史稿》卷四百五 · 曾国藩传</p></div></div>
+    <div class="body"><p>民国初年修的《清史稿》里的传记，以军事为主线，末尾有一段对他为人和学问的总评。</p></div>
+    <section class="full"><div class="wl">${PROSE.bio.map((w,j)=>wkHTML(w,"b"+j)).join("")}</div></section>`;
+}
+function showBucket(){
+  view="bucket";markPeople(-1);
+  tabs.forEach(b=>b.setAttribute("aria-current","false"));
+  for(const k in ptEls)ptEls[k].classList.remove("now");
+  const u=WORKS.u;
+  detail.innerHTML=`
+    <div class="head"><div class="seal" aria-hidden="true">待考</div><div>
+      <h2>没能归到某一站的作品</h2>
+      <p class="meta">${PROSE?`${PROSE.u.reduce((n,g)=>n+g.w.length,0)} 篇`:""}</p></div></div>
+    <div class="body"><p>这几篇在维基文库上没有注明写作时间，我也没有把握，先放在这里。</p></div>
+    <section class="full" id="full">
+      <input type="search" id="flt" placeholder="在这些篇目里找" aria-label="在这些篇目里找">
+            ${PROSE?`<h4>文</h4>${PROSE.u.map((g,gi)=>`<details class="grp" data-g="${gi}"><summary>${esc(g.g)}（${g.w.length}）</summary><div class="wl"></div></details>`).join("")}`:""}
+    </section>`;
+  const box=document.getElementById("full");
+  box.querySelectorAll(".grp").forEach(d=>d.addEventListener("toggle",()=>fillGroup(d)));
+  document.getElementById("flt").addEventListener("input",e=>filterList(box,e.target.value.trim()));
+}
+/* 待考里的文章很多，展开某一类时才生成列表 */
+function fillGroup(d){
+  const wl=d.querySelector(".wl");
+  if(!d.open||wl.childElementCount)return;
+  const gi=+d.dataset.g;
+  wl.innerHTML=PROSE.u[gi].w.map((w,j)=>wkHTML(w,`g${gi}_${j}`)).join("");
+}
+function openWork(si,k){
+  if(si<0)showBucket();else go(si);
+  const gm=/^g(\d+)_/.exec(k);
+  if(gm){const g=detail.querySelector(`.grp[data-g="${gm[1]}"]`);if(g){g.open=true;fillGroup(g);}}
+  const d=detail.querySelector(`.wk[data-k="${k}"]`);
+  if(!d)return;
+  d.open=true;d.classList.add("hit");
+  d.scrollIntoView({block:"center",behavior:"smooth"});
+}
+const qres=document.getElementById("qres");
+document.getElementById("q").addEventListener("input",e=>{
+  const q=e.target.value.trim();
+  if(!q||!WORKS){qres.hidden=true;return;}
+  const hits=INDEX.filter(x=>x.w[0].includes(q)||x.w[1].includes(q));
+  qres.hidden=false;
+  qres.innerHTML=`<p>${hits.length?`找到 ${hits.length} 篇${hits.length>80?"，先列出前 80 篇":""}`:"没有找到。全集文字由繁体转换而来，个别字可能和通行本不同，换个词试试。"}</p>`+
+    hits.slice(0,80).map(x=>`<button type="button" data-si="${x.si}" data-k="${x.k}"><span class="rt">${esc(x.w[0])}</span><span class="rs">${x.si<0?"待考":PLACES[STOPS[x.si].p].n+" "+STOPS[x.si].yr}</span></button>`).join("");
+});
+qres.addEventListener("click",e=>{const b=e.target.closest("button[data-k]");if(b)openWork(+b.dataset.si,b.dataset.k);});
+document.getElementById("bucketBtn").addEventListener("click",showBucket);
+document.getElementById("bioBtn").addEventListener("click",showBio);
+
+/* ---------- 人物线 ---------- */
+/* 文章题目里对这些人的称呼 */
+const ALIAS={"曾国荃":["沅弟"],"曾国潢":["澄弟"],"曾国华":["温弟"],"曾国葆":["季弟"],"曾纪泽":["纪泽"],"曾纪鸿":["纪鸿"],"欧阳夫人":["欧阳夫人"]};
+const pbox=document.getElementById("people");
+PEOPLE.forEach((P,pi)=>{
+  const b=document.createElement("button");b.type="button";b.textContent=P.n;b.setAttribute("aria-pressed","false");
+  b.addEventListener("click",()=>showPerson(pi));pbox.append(b);
+});
+function markPeople(pi){[...pbox.querySelectorAll("button")].forEach((b,j)=>b.setAttribute("aria-pressed",j===pi?"true":"false"));}
+function showPerson(pi){
+  view="person";markPeople(pi);
+  const P=PEOPLE[pi];
+  tabs.forEach((b,j)=>{b.setAttribute("aria-current","false");b.classList.toggle("past",!P.m.some(x=>x[0]===j));});
+  segs.forEach(p=>p.classList.remove("on","now"));
+  const here=new Set(P.m.map(x=>STOPS[x[0]].p));
+  for(const k in ptEls){ptEls[k].classList.toggle("seen",here.has(k));ptEls[k].classList.remove("now");}
+  const al=ALIAS[P.n]||[];
+  const letters=al.length?INDEX.filter(x=>x.w.length>2&&/^(致|谕|禀|寄|与|答)/.test(x.w[0])&&al.some(a=>x.w[0].includes(a))):[];
+  detail.innerHTML=`
+    <div class="head"><div class="seal" aria-hidden="true">${P.n.slice(0,3)}</div><div>
+      <h2>${esc(P.n)}</h2><p class="meta">${esc(P.r)}<br>在 ${P.m.length} 站里出现，地图上的实心点是这些地方</p></div></div>
+    <div class="body"><p>${esc(P.i)}</p></div>
+    <h3>和曾国藩的交集</h3>
+    <ul class="meet">${P.m.map(x=>`<li><button type="button" data-go="${x[0]}"><span class="mw"><b>${PLACES[STOPS[x[0]].p].n}</b>${STOPS[x[0]].yr}</span><span class="mt">${esc(x[1])}</span></button></li>`).join("")}</ul>
+    ${letters.length?`<h3>写给他的信</h3><p class="hint">本站收录的家书里写给此人的，共 ${letters.length} 封。</p>
+    <div class="qres">${letters.map(x=>`<button type="button" data-si="${x.si}" data-k="${x.k}"><span class="rt">${esc(x.w[0])}</span><span class="rs">${x.si<0?"待考":PLACES[STOPS[x.si].p].n+" "+STOPS[x.si].yr}</span></button>`).join("")}</div>`:""}
+    <button type="button" class="linkbtn" data-q="${esc(P.q)}">在全部作品里找“${esc(P.q)}”</button>
+    <p class="hint">点任意一行，跳到那一站。</p>`;
+}
+detail.addEventListener("click",e=>{
+  const w=e.target.closest(".qres button[data-k]");if(w){openWork(+w.dataset.si,w.dataset.k);return;}
+  const b=e.target.closest("button[data-q]");if(!b)return;
+  const q=document.getElementById("q");q.value=b.dataset.q;q.dispatchEvent(new Event("input"));
+  q.scrollIntoView({block:"center",behavior:"smooth"});
+});
+
+fetch("works.json").then(r=>{if(!r.ok)throw 0;return r.json();}).then(d=>{
+  /* 诗的原文是繁体，转成简体；转换库没载入时就照繁体显示 */
+  let conv=s=>s;
+  try{if(window.OpenCC)conv=OpenCC.Converter({from:"t",to:"cn"});}catch(e){}
+  const cv=a=>a.forEach(w=>{w[0]=conv(w[0]);w[1]=conv(w[1]);});
+  d.s.forEach(x=>{cv(x.p);cv(x.c);});cv(d.u.p);cv(d.u.c);
+  WORKS=d;
+  let np=0,nc=0;
+  d.s.forEach((x,si)=>{np+=x.p.length;nc+=x.c.length;x.c.forEach((w,j)=>INDEX.push({si,k:"c"+j,w}));x.p.forEach((w,j)=>INDEX.push({si,k:"p"+j,w}));});
+  d.u.c.forEach((w,j)=>INDEX.push({si:-1,k:"c"+j,w}));d.u.p.forEach((w,j)=>INDEX.push({si:-1,k:"p"+j,w}));
+  document.getElementById("stat").textContent=`年谱已载入`;
+  const bb=document.getElementById("bucketBtn");
+  bb.hidden=true;
+  if(view==="stop")renderFull();
+  return fetch("prose.json").then(r=>{if(!r.ok)throw 0;return r.json();}).then(pd=>{
+    /* 文章有两百多万字，分批转换，免得页面卡住 */
+    const all=[];pd.s.forEach(a=>all.push(...a));pd.u.forEach(g=>all.push(...g.w));
+    let i=0;
+    (function step(){
+      const end=Math.min(i+120,all.length);
+      for(;i<end;i++){all[i][0]=conv(all[i][0]);all[i][1]=conv(all[i][1]);}
+      if(i<all.length){setTimeout(step,0);return;}
+      pd.u.forEach(g=>g.g=conv(g.g));
+      (pd.bio||[]).forEach(w=>{w[1]=conv(w[1]);});
+      if(pd.bio)document.getElementById("bioBtn").hidden=false;
+      PROSE=pd;
+      let nw=0;
+      pd.s.forEach((a,si)=>{nw+=a.length;a.forEach((w,j)=>INDEX.push({si,k:"w"+j,w}));});
+      pd.u.forEach((g,gi)=>g.w.forEach((w,j)=>INDEX.push({si:-1,k:`g${gi}_${j}`,w})));
+      const nu=pd.u.reduce((n,g)=>n+g.w.length,0);
+      document.getElementById("stat").textContent=`已归入各站：年谱全文，家书、日记、文章 ${nw} 篇`;
+      bb.textContent=`另有未注年月的文章 ${nu} 篇`;bb.hidden=!nu;
+      if(view==="stop")renderFull();else if(view==="bucket")showBucket();
+    })();
+  }).catch(()=>{document.getElementById("stat").textContent+="（文章没有载入成功）";});
+}).catch(()=>{WORKS=false;document.getElementById("stat").textContent="原文没有载入成功";renderFull();});
+detail.addEventListener("click",e=>{const b=e.target.closest("button[data-go]");if(b&&!b.disabled)go(+b.dataset.go);});
+document.addEventListener("keydown",e=>{
+  if(e.target.closest("input,textarea,summary"))return;
+  if(e.key==="ArrowRight")go(cur+1);
+  if(e.key==="ArrowLeft")go(cur-1);
+});
+const m=/^#s(\d+)$/.exec(location.hash);
+go(m?+m[1]-1:0);
+</script>
+
+</body>
+</html>
